@@ -63,7 +63,7 @@ public class BaseDepthController {
     /**
      * Blur radius when completely zoomed out, in pixels.
      */
-    protected final int mMaxBlurRadius;
+    protected final float mMaxBlurRadius;
     protected final WallpaperManager mWallpaperManager;
     protected boolean mCrossWindowBlursEnabled;
 
@@ -96,7 +96,7 @@ public class BaseDepthController {
 
     public BaseDepthController(Launcher activity) {
         mLauncher = activity;
-        mMaxBlurRadius = activity.getResources().getInteger(R.integer.max_depth_blur_radius);
+        mMaxBlurRadius = Utilities.getBlurRadius(activity);
         mWallpaperManager = activity.getSystemService(WallpaperManager.class);
 
         MultiPropertyFactory<BaseDepthController> depthProperty =
@@ -130,7 +130,8 @@ public class BaseDepthController {
             // The API's full zoom-out is three times larger than the zoom-out we apply to the
             // icons. To keep the two consistent throughout the animation while keeping Launcher's
             // concept of full depth unchanged, we divide the depth by 3 here.
-            mWallpaperManager.setWallpaperZoomOut(windowToken, depth / 3);
+            mWallpaperManager.setWallpaperZoomOut(windowToken,
+                            Utilities.canZoomWallpaper(mLauncher) ? depth / 3 : 1);
         }
 
         if (!BlurUtils.supportsBlursOnWindows()) {

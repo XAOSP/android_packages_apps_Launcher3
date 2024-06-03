@@ -59,6 +59,7 @@ public class WorkModeSwitch extends LinearLayout implements Insettable,
     private ImageView mIcon;
     private TextView mTextView;
     private final StatsLogManager mStatsLogManager;
+    private boolean mDoPause = true;
 
 
     public WorkModeSwitch(@NonNull Context context) {
@@ -90,7 +91,7 @@ public class WorkModeSwitch extends LinearLayout implements Insettable,
         }
 
         setInsets(mActivityContext.getDeviceProfile().getInsets());
-        updateStringFromCache();
+        updatePauseMode();
     }
 
     @Override
@@ -117,12 +118,13 @@ public class WorkModeSwitch extends LinearLayout implements Insettable,
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
         View parent = (View) getParent();
-        int allAppsLeftRightPadding = mActivityContext.getDeviceProfile().allAppsLeftRightPadding;
+        boolean isRtl = Utilities.isRtl(getResources());
+        Rect allAppsPadding = mActivityContext.getDeviceProfile().allAppsPadding;
         int size = parent.getWidth() - parent.getPaddingLeft() - parent.getPaddingRight()
-                - 2 * allAppsLeftRightPadding;
+                - (allAppsPadding.left + allAppsPadding.right);
         int tabWidth = getTabWidth(getContext(), size);
-        int shift = (size - tabWidth) / 2 + allAppsLeftRightPadding;
-        setTranslationX(Utilities.isRtl(getResources()) ? shift : -shift);
+        int shift = (size - tabWidth) / 2 + (isRtl ? allAppsPadding.left : allAppsPadding.right);
+        setTranslationX(isRtl ? shift : -shift);
     }
 
     @Override
@@ -210,7 +212,18 @@ public class WorkModeSwitch extends LinearLayout implements Insettable,
     public void updateStringFromCache(){
         StringCache cache = mActivityContext.getStringCache();
         if (cache != null) {
-            mTextView.setText(cache.workProfilePauseButton);
+            mTextView.setText(mDoPause ? cache.workProfilePauseButton :
+                    cache.workProfileEnableButton);
         }
+    }
+
+    private void updatePauseMode() {
+        mIcon.setImageResource(mDoPause ? R.drawable.ic_corp_off : R.drawable.ic_corp);
+        updateStringFromCache();
+    }
+
+    public void setPauseMode(final boolean doPause) {
+        mDoPause = doPause;
+        updatePauseMode();
     }
 }

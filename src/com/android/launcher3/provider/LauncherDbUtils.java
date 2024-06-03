@@ -16,6 +16,7 @@
 
 package com.android.launcher3.provider;
 
+import static com.android.launcher3.LauncherSettings.Favorites.getColumns;
 import static com.android.launcher3.icons.IconCache.EXTRA_SHORTCUT_BADGE_OVERRIDE_PACKAGE;
 
 import android.content.ContentValues;
@@ -32,7 +33,6 @@ import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.UserManager;
 import android.text.TextUtils;
-import android.util.Log;
 
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.LauncherSettings.Favorites;
@@ -49,7 +49,6 @@ import com.android.launcher3.util.IntSet;
  * A set of utility methods for Launcher DB used for DB updates and migration.
  */
 public class LauncherDbUtils {
-
     /**
      * Returns a string which can be used as a where clause for DB query to match the given itemId
      */
@@ -91,10 +90,12 @@ public class LauncherDbUtils {
         if (fromDb != toDb) {
             toDb.execSQL("ATTACH DATABASE '" + fromDb.getPath() + "' AS from_db");
             toDb.execSQL(
-                    "INSERT INTO " + toTable + " SELECT * FROM from_db." + fromTable);
+                    "INSERT INTO " + toTable + " SELECT " + getColumns(userSerial)
+                        + " FROM from_db." + fromTable);
             toDb.execSQL("DETACH DATABASE 'from_db'");
         } else {
-            toDb.execSQL("INSERT INTO " + toTable + " SELECT * FROM " + fromTable);
+            toDb.execSQL("INSERT INTO " + toTable + " SELECT " + getColumns(userSerial) + " FROM "
+                    + fromTable);
         }
     }
 
@@ -116,56 +117,49 @@ public class LauncherDbUtils {
                 deletedShortcuts.add(lc.id);
                 continue;
             }
-            ContentValues update;
-            try {
-                Intent intent = lc.parseIntent();
-                if (intent == null) {
-                    deletedShortcuts.add(lc.id);
-                    continue;
-                }
+            Intent intent = lc.parseIntent();
+            if (intent == null) {
+                deletedShortcuts.add(lc.id);
+                continue;
+            }
             if (TextUtils.isEmpty(lc.getTitle())) {
                 deletedShortcuts.add(lc.id);
                 continue;
             }
 
-                // Make sure the target intent can be launched without any permissions. Otherwise remove
-                // the shortcut
-                ResolveInfo ri = context.getPackageManager().resolveActivity(intent, 0);
-                if (ri == null || !TextUtils.isEmpty(ri.activityInfo.permission)) {
-                    deletedShortcuts.add(lc.id);
-                    continue;
-                }
-                PersistableBundle extras = new PersistableBundle();
-                extras.putString(EXTRA_SHORTCUT_BADGE_OVERRIDE_PACKAGE, ri.activityInfo.packageName);
-                ShortcutInfo.Builder infoBuilder = new ShortcutInfo.Builder(
-                        context, "migrated_shortcut-" + lc.id)
-                        .setIntent(intent)
-                        .setExtras(extras)
-                        .setShortLabel(lc.getTitle());
-
-                Bitmap bitmap = null;
-                byte[] iconData = lc.getIconBlob();
-                if (iconData != null) {
-                    bitmap = BitmapFactory.decodeByteArray(iconData, 0, iconData.length);
-                }
-                if (bitmap != null) {
-                    infoBuilder.setIcon(Icon.createWithBitmap(bitmap));
-                }
-
-                ShortcutInfo info = infoBuilder.build();
-                if (!PinRequestHelper.createRequestForShortcut(context, info).accept()) {
-                    deletedShortcuts.add(lc.id);
-                    continue;
-                }
-                update = new ContentValues();
-                update.put(Favorites.ITEM_TYPE, Favorites.ITEM_TYPE_DEEP_SHORTCUT);
-                update.put(Favorites.INTENT,
-                        ShortcutKey.makeIntent(info.getId(), context.getPackageName()).toUri(0));
-            } catch (Throwable e) {
-                Log.e("migrateLegacyShortcuts", "unable to migrate, id " + lc.id, e);
+            // Make sure the target intent can be launched without any permissions. Otherwise remove
+            // the shortcut
+            ResolveInfo ri = context.getPackageManager().resolveActivity(intent, 0);
+            if (ri == null || !TextUtils.isEmpty(ri.activityInfo.permission)) {
                 deletedShortcuts.add(lc.id);
                 continue;
             }
+            PersistableBundle extras = new PersistableBundle();
+            extras.putString(EXTRA_SHORTCUT_BADGE_OVERRIDE_PACKAGE, ri.activityInfo.packageName);
+            ShortcutInfo.Builder infoBuilder = new ShortcutInfo.Builder(
+                    context, "migrated_shortcut-" + lc.id)
+                    .setIntent(intent)
+                    .setExtras(extras)
+                    .setShortLabel(lc.getTitle());
+
+            Bitmap bitmap = null;
+            byte[] iconData = lc.getIconBlob();
+            if (iconData != null) {
+                bitmap = BitmapFactory.decodeByteArray(iconData, 0, iconData.length);
+            }
+            if (bitmap != null) {
+                infoBuilder.setIcon(Icon.createWithBitmap(bitmap));
+            }
+
+            ShortcutInfo info = infoBuilder.build();
+            if (!PinRequestHelper.createRequestForShortcut(context, info).accept()) {
+                deletedShortcuts.add(lc.id);
+                continue;
+            }
+            ContentValues update = new ContentValues();
+            update.put(Favorites.ITEM_TYPE, Favorites.ITEM_TYPE_DEEP_SHORTCUT);
+            update.put(Favorites.INTENT,
+                    ShortcutKey.makeIntent(info.getId(), context.getPackageName()).toUri(0));
             db.update(Favorites.TABLE_NAME, update, "_id = ?",
                     new String[] {Integer.toString(lc.id)});
         }

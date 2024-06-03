@@ -26,8 +26,6 @@ import androidx.core.graphics.ColorUtils;
 import com.android.launcher3.R;
 import com.android.launcher3.util.Themes;
 
-import java.lang.IllegalArgumentException;
-
 /**
  * Contains colors based on the dominant color of an icon.
  */
@@ -98,8 +96,8 @@ public class IconPalette {
     /** For debugging. This was copied from com.android.internal.util.NotificationColorUtil. */
     private static String contrastChange(int colorOld, int colorNew, int bg) {
         return String.format("from %.2f:1 to %.2f:1",
-                calculateContrast(colorOld, bg),
-                calculateContrast(colorNew, bg));
+                ColorUtils.calculateContrast(colorOld, bg),
+                ColorUtils.calculateContrast(colorNew, bg));
     }
 
     /**
@@ -109,15 +107,7 @@ public class IconPalette {
      * This was copied from com.android.internal.util.NotificationColorUtil.
      */
     private static int ensureTextContrast(int color, int bg) {
-        int res = color;
-        try {
-            res = findContrastColor(color, bg, 4.5);
-        } catch (IllegalArgumentException e) {
-            // Just returning the same color in this case
-            Log.e(TAG, "ensureTextContrast: Invalid fg/bg color int."
-                    + " fg=" + color + " bg=" + bg);
-        }
-        return res;
+        return findContrastColor(color, bg, 4.5);
     }
     /**
      * Finds a suitable color such that there's enough contrast.
@@ -131,7 +121,7 @@ public class IconPalette {
      * This was copied from com.android.internal.util.NotificationColorUtil.
      */
     private static int findContrastColor(int fg, int bg, double minRatio) {
-        if (calculateContrast(fg, bg) >= minRatio) {
+        if (ColorUtils.calculateContrast(fg, bg) >= minRatio) {
             return fg;
         }
 
@@ -147,21 +137,12 @@ public class IconPalette {
         for (int i = 0; i < 15 && high - low > 0.00001; i++) {
             final double l = (low + high) / 2;
             fg = ColorUtils.LABToColor(l, a, b);
-            if (calculateContrast(fg, bg) > minRatio) {
+            if (ColorUtils.calculateContrast(fg, bg) > minRatio) {
                 if (isBgDark) high = l; else low = l;
             } else {
                 if (isBgDark) low = l; else high = l;
             }
         }
         return ColorUtils.LABToColor(low, a, b);
-    }
-
-    private static double calculateContrast(int fg, int bg) {
-        bg = setAlphaComponent(bg, 255);
-        return ColorUtils.calculateContrast(fg, bg);
-    }
-
-    private static int setAlphaComponent(int color, int alpha) {
-        return (color & 0x00ffffff) | (alpha << 24);
     }
 }

@@ -52,11 +52,6 @@ filegroup {
 }
 
 filegroup {
-    name: "launcher-src_base",
-    srcs: [ "src_base/**/*.java", "src_base/**/*.kt" ],
-}
-
-filegroup {
     name: "launcher-ext_tests",
     srcs: [ "ext_tests/**/*.java", "ext_tests/**/*.kt" ],
 }
@@ -141,21 +136,11 @@ java_library {
     min_sdk_version: min_launcher3_sdk_version,
 }
 
-java_import {
-    name: "libGoogleFeed",
-    jars: [
-        "libs/libGoogleFeed.jar",
-    ],
-}
-
 // Library with all the dependencies for building Launcher3
 android_library {
     name: "Launcher3ResLib",
     srcs: [ ],
     resource_dirs: ["res"],
-    defaults: [
-        "SettingsLibDefaults",
-    ],
     static_libs: [
         "LauncherPluginLib",
         "launcher_quickstep_log_protos_lite",
@@ -168,12 +153,11 @@ android_library {
         "androidx.cardview_cardview",
         "com.google.android.material_material",
         "iconloader_base",
-        "view_capture",
         "libGoogleFeed",
         "SettingsLib",
-        "bcsmartspace-google",
-        "SystemUIPluginLib",
-        "animationlib"
+        "view_capture",
+        "animationlib",
+        "org.lineageos.platform"
     ],
     manifest: "AndroidManifest-common.xml",
     sdk_version: "current",
@@ -190,9 +174,12 @@ android_library {
     name: "Launcher3CommonDepsLib",
     srcs: ["src_build_config/**/*.java"],
     static_libs: [
+        "SystemUI-statsd",
         "Launcher3ResLib",
         "launcher-testing-shared",
-        "animationlib"
+        "animationlib",
+        "com_android_launcher3_flags_lib",
+        "com_android_wm_shell_flags_lib",
     ],
     sdk_version: "current",
     min_sdk_version: min_launcher3_sdk_version,
@@ -215,7 +202,6 @@ android_app {
         ":launcher-src",
         ":launcher-src_shortcuts_overrides",
         ":launcher-src_ui_overrides",
-        ":launcher-src_base",
         ":launcher-ext_tests",
     ],
     resource_dirs: [
@@ -240,7 +226,7 @@ android_app {
     ],
     required: [
         "privapp_whitelist_com.android.launcher3",
-        "privapp_whitelist_aospa_launcher3.xml",
+        "privapp_whitelist_com.android.launcher3-ext",
     ],
 
     jacoco: {
@@ -252,6 +238,13 @@ android_app {
     lint: {
         baseline_filename: "lint-baseline-launcher3.xml",
     },
+}
+
+java_import {
+    name: "libGoogleFeed",
+    jars: [
+        "libs/libGoogleFeed.jar",
+    ],
 }
 
 // Library with all the dependencies for building quickstep
@@ -268,6 +261,7 @@ android_library {
         "Launcher3ResLib",
         "lottie",
         "SystemUISharedLib",
+        "SettingsLibSettingsTheme",
         "SystemUI-statsd",
         "animationlib",
     ],
@@ -299,7 +293,7 @@ android_library {
         "androidx.room_room-runtime",
     ],
     plugins: ["androidx.room_room-compiler-plugin"],
-    manifest: "quickstep/AndroidManifest-launcher.xml",
+    manifest: "quickstep/AndroidManifest.xml",
     additional_manifests: [
         "go/AndroidManifest.xml",
         "AndroidManifest-common.xml",
@@ -373,7 +367,7 @@ android_app {
     ],
     required: [
         "privapp_whitelist_com.android.launcher3",
-        "privapp_whitelist_aospa_launcher3.xml",
+        "privapp_whitelist_com.android.launcher3-ext",
     ],
 
     additional_manifests: [
@@ -397,10 +391,8 @@ android_app {
         enabled: false,
     },
 
-    certificate: "platform",
     platform_apis: true,
-    min_sdk_version: "current",
-    target_sdk_version: "current",
+    certificate: "platform",
 
     privileged: true,
     system_ext_specific: true,
@@ -412,7 +404,7 @@ android_app {
     ],
     required: [
         "privapp_whitelist_com.android.launcher3",
-        "privapp_whitelist_aospa_launcher3.xml",
+        "privapp_whitelist_com.android.launcher3-ext",
     ],
 
     resource_dirs: ["quickstep/res"],
@@ -467,7 +459,7 @@ android_app {
     ],
     required: [
         "privapp_whitelist_com.android.launcher3",
-        "privapp_whitelist_aospa_launcher3.xml",
+        "privapp_whitelist_com.android.launcher3-ext",
     ],
 
     additional_manifests: [
@@ -484,8 +476,9 @@ android_app {
 }
 
 prebuilt_etc {
-    name: "privapp_whitelist_aospa_launcher3.xml",
-    src: "privapp_whitelist_aospa_launcher3.xml",
+    name: "privapp_whitelist_com.android.launcher3-ext",
     system_ext_specific: true,
     sub_dir: "permissions",
+    src: "privapp_whitelist_com.android.launcher3-ext.xml",
+    filename_from_src: true,
 }

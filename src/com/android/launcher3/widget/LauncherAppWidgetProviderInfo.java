@@ -67,7 +67,7 @@ public class LauncherAppWidgetProviderInfo extends AppWidgetProviderInfo
      */
     public int maxSpanY;
 
-    private boolean mIsMinSizeFulfilled;
+    protected boolean mIsMinSizeFulfilled;
 
     public static LauncherAppWidgetProviderInfo fromProviderInfo(Context context,
             AppWidgetProviderInfo info) {
@@ -98,7 +98,7 @@ public class LauncherAppWidgetProviderInfo extends AppWidgetProviderInfo
 
     public void initSpans(Context context, InvariantDeviceProfile idp) {
         int minSpanX = 0;
-        int minSpanY = 1;
+        int minSpanY = 0;
         int maxSpanX = idp.numColumns;
         int maxSpanY = idp.numRows;
         int spanX = 0;

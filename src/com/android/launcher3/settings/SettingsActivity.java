@@ -16,28 +16,18 @@
 
 package com.android.launcher3.settings;
 
-import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.ACTION_ACCESSIBILITY_FOCUS;
+import static androidx.preference.PreferenceFragmentCompat.ARG_PREFERENCE_ROOT;
 
-import static com.android.launcher3.config.FeatureFlags.IS_STUDIO_BUILD;
-
-import static com.android.launcher3.Utilities.KEY_DOCK_SEARCH;
-import static com.android.launcher3.Utilities.KEY_DT_GESTURE;
-import static com.android.launcher3.Utilities.KEY_SMARTSPACE;
-import static com.android.launcher3.states.RotationHelper.ALLOW_ROTATION_PREFERENCE_KEY;
-
-import static co.aospa.launcher.OverlayCallbackImpl.KEY_ENABLE_MINUS_ONE;
-
-import android.content.Context;
+import android.app.Activity;
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
-import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.MenuItem;
 import android.view.View;
 
-import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.view.WindowCompat;
 import androidx.fragment.app.DialogFragment;
@@ -48,63 +38,40 @@ import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceFragmentCompat.OnPreferenceStartFragmentCallback;
 import androidx.preference.PreferenceFragmentCompat.OnPreferenceStartScreenCallback;
-import androidx.preference.PreferenceGroup;
 import androidx.preference.PreferenceGroup.PreferencePositionCallback;
 import androidx.preference.PreferenceScreen;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.android.launcher3.DeviceProfile;
-import com.android.launcher3.InvariantDeviceProfile;
-import com.android.launcher3.LauncherAppState;
+import com.android.launcher3.BuildConfig;
 import com.android.launcher3.LauncherFiles;
-import com.android.launcher3.LauncherPrefs;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
-import com.android.launcher3.config.FeatureFlags;
-import com.android.launcher3.model.WidgetsModel;
-import com.android.launcher3.states.RotationHelper;
-import com.android.launcher3.uioverrides.flags.DeveloperOptionsFragment;
-import com.android.launcher3.uioverrides.plugins.PluginManagerWrapper;
-import com.android.launcher3.util.DisplayController;
+import com.android.launcher3.util.Executors;
+import com.android.launcher3.util.SettingsCache;
 
 import com.android.settingslib.collapsingtoolbar.CollapsingToolbarBaseActivity;
 
-import java.util.Collections;
-import java.util.List;
-
 /**
- * Settings activity for Launcher. Currently implements the following setting: Allow rotation
+ * Settings activity for Launcher.
  */
 public class SettingsActivity extends CollapsingToolbarBaseActivity
-        implements OnPreferenceStartFragmentCallback, OnPreferenceStartScreenCallback,
-        SharedPreferences.OnSharedPreferenceChangeListener{
+        implements OnPreferenceStartFragmentCallback, OnPreferenceStartScreenCallback {
 
-    /** List of fragments that can be hosted by this activity. */
-    private static final List<String> VALID_PREFERENCE_FRAGMENTS =
-            !Utilities.IS_DEBUG_DEVICE ? Collections.emptyList()
-                    : Collections.singletonList(DeveloperOptionsFragment.class.getName());
+    public static final String EXTRA_FRAGMENT_ARGS = ":settings:fragment_args";
 
-    private static final String DEVELOPER_OPTIONS_KEY = "pref_developer_options";
-    private static final String FLAGS_PREFERENCE_KEY = "flag_toggler";
+    // Intent extra to indicate the pref-key to highlighted when opening the settings activity
+    public static final String EXTRA_FRAGMENT_HIGHLIGHT_KEY = ":settings:fragment_args_key";
+    // Intent extra to indicate the pref-key of the root screen when opening the settings activity
+    public static final String EXTRA_FRAGMENT_ROOT_KEY = ARG_PREFERENCE_ROOT;
 
-    private static final String NOTIFICATION_DOTS_PREFERENCE_KEY = "pref_icon_badging";
-
-    public static final String EXTRA_FRAGMENT_ARG_KEY = ":settings:fragment_args_key";
-    public static final String EXTRA_SHOW_FRAGMENT_ARGS = ":settings:show_fragment_args";
     private static final int DELAY_HIGHLIGHT_DURATION_MILLIS = 600;
     public static final String SAVE_HIGHLIGHTED_KEY = "android:preference_highlighted";
-
-    private static final String KEY_SUGGESTIONS = "pref_suggestions";
-
-    @VisibleForTesting
-    static final String EXTRA_FRAGMENT = ":settings:fragment";
-    @VisibleForTesting
-    static final String EXTRA_FRAGMENT_ARGS = ":settings:fragment_args";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.settings_activity);
+
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         Intent intent = getIntent();
@@ -115,58 +82,21 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
                 args = new Bundle();
             }
 
-            String prefKey = intent.getStringExtra(EXTRA_FRAGMENT_ARG_KEY);
-            if (!TextUtils.isEmpty(prefKey)) {
-                args.putString(EXTRA_FRAGMENT_ARG_KEY, prefKey);
+            String highlight = intent.getStringExtra(EXTRA_FRAGMENT_HIGHLIGHT_KEY);
+            if (!TextUtils.isEmpty(highlight)) {
+                args.putString(EXTRA_FRAGMENT_HIGHLIGHT_KEY, highlight);
+            }
+            String root = intent.getStringExtra(EXTRA_FRAGMENT_ROOT_KEY);
+            if (!TextUtils.isEmpty(root)) {
+                args.putString(EXTRA_FRAGMENT_ROOT_KEY, root);
             }
 
             final FragmentManager fm = getSupportFragmentManager();
             final Fragment f = fm.getFragmentFactory().instantiate(getClassLoader(),
-                    getPreferenceFragment());
+                    getString(R.string.settings_fragment_name));
             f.setArguments(args);
             // Display the fragment as the main content.
-            fm.beginTransaction().replace(com.android.settingslib.widget.R.id.content_frame, f).commit();
-        }
-        LauncherPrefs.getPrefs(getApplicationContext())
-                .registerOnSharedPreferenceChangeListener(this);
-    }
-
-    /**
-     * Obtains the preference fragment to instantiate in this activity.
-     *
-     * @return the preference fragment class
-     * @throws IllegalArgumentException if the fragment is unknown to this activity
-     */
-    private String getPreferenceFragment() {
-        String preferenceFragment = getIntent().getStringExtra(EXTRA_FRAGMENT);
-        String defaultFragment = getString(R.string.settings_fragment_name);
-
-        if (TextUtils.isEmpty(preferenceFragment)) {
-            return defaultFragment;
-        } else if (!preferenceFragment.equals(defaultFragment)
-                && !VALID_PREFERENCE_FRAGMENTS.contains(preferenceFragment)) {
-            throw new IllegalArgumentException(
-                    "Invalid fragment for this activity: " + preferenceFragment);
-        } else {
-            return preferenceFragment;
-        }
-    }
-
-    @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        switch (key) {
-            case KEY_DOCK_SEARCH:
-            case KEY_SMARTSPACE:
-                LauncherAppState.getInstanceNoCreate().setNeedsRestart();
-                break;
-            case KEY_DT_GESTURE:
-                Settings.System.putIntForUser(getContentResolver(),
-                        Settings.System.GESTURE_DOUBLE_TAP_SLEEP,
-                        sharedPreferences.getBoolean(key, true) ? 1 : 0,
-                        UserHandle.USER_CURRENT);
-                break;
-            default:
-                break;
+            fm.beginTransaction().replace(com.android.settingslib.collapsingtoolbar.R.id.content_frame, f).commit();
         }
     }
 
@@ -183,7 +113,6 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
             ((DialogFragment) f).show(fm, key);
         } else {
             startActivity(new Intent(this, SettingsActivity.class)
-                    .putExtra(EXTRA_FRAGMENT, fragment)
                     .putExtra(EXTRA_FRAGMENT_ARGS, args));
         }
         return true;
@@ -198,8 +127,8 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
     @Override
     public boolean onPreferenceStartScreen(PreferenceFragmentCompat caller, PreferenceScreen pref) {
         Bundle args = new Bundle();
-        args.putString(PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, pref.getKey());
-        return startPreference(getString(R.string.settings_fragment_name), args, pref.getKey());
+        args.putString(ARG_PREFERENCE_ROOT, pref.getKey());
+        return startPreference(getString(R.string.settings_title), args, pref.getKey());
     }
 
     @Override
@@ -214,20 +143,23 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
     /**
      * This fragment shows the launcher preferences.
      */
-    public static class LauncherSettingsFragment extends PreferenceFragmentCompat {
+    public static class LauncherSettingsFragment extends PreferenceFragmentCompat implements
+            SettingsCache.OnChangeListener {
+
+        private boolean mRestartOnResume = false;
 
         private String mHighLightKey;
         private boolean mPreferenceHighlighted = false;
-        private Preference mDeveloperOptionPref;
-        private PreferenceGroup mDeveloperOptionPrefGroup;
+
+        @Override
+        public void onCreate(@Nullable Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+        }
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             final Bundle args = getArguments();
-            mHighLightKey = args == null ? null : args.getString(EXTRA_FRAGMENT_ARG_KEY);
-            if (rootKey == null && !TextUtils.isEmpty(mHighLightKey)) {
-                rootKey = getParentKeyForPref(mHighLightKey);
-            }
+            mHighLightKey = args == null ? null : args.getString(EXTRA_FRAGMENT_HIGHLIGHT_KEY);
 
             if (savedInstanceState != null) {
                 mPreferenceHighlighted = savedInstanceState.getBoolean(SAVE_HIGHLIGHTED_KEY);
@@ -236,39 +168,7 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
             getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
             setPreferencesFromResource(R.xml.launcher_preferences, rootKey);
 
-            PreferenceScreen screen = getPreferenceScreen();
-            for (int i = screen.getPreferenceCount() - 1; i >= 0; i--) {
-                Preference preference = screen.getPreference(i);
-                if (preference instanceof PreferenceCategory) {
-                    PreferenceCategory category = (PreferenceCategory) preference;
-                    for (int j = category.getPreferenceCount() - 1; j >= 0; j--) {
-                        Preference pref = category.getPreference(j);
-                        if (!initPreference(pref, category)) {
-                            category.removePreference(pref);
-                        }
-                    }
-                    if (category.getPreferenceCount() == 0) {
-                        screen.removePreference(category);
-                    }
-		} else if (initPreference(preference, screen)) {
-			if (IS_STUDIO_BUILD && preference == mDeveloperOptionPref) {
-                            preference.setOrder(0);
-                        }
-                } else if (!initPreference(preference, screen)) {
-                    screen.removePreference(preference);
-                }
-            }
-
             if (getActivity() != null && !TextUtils.isEmpty(getPreferenceScreen().getTitle())) {
-                if (getPreferenceScreen().getTitle().equals(
-                        getResources().getString(R.string.search_pref_screen_title))){
-                    DeviceProfile mDeviceProfile = InvariantDeviceProfile.INSTANCE.get(
-                            getContext()).getDeviceProfile(getContext());
-                    getPreferenceScreen().setTitle(mDeviceProfile.isMultiDisplay
-                            || mDeviceProfile.isPhone ?
-                            R.string.search_pref_screen_title :
-                            R.string.search_pref_screen_title_tablet);
-                }
                 getActivity().setTitle(getPreferenceScreen().getTitle());
             }
         }
@@ -286,6 +186,7 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
                         bottomPadding + insets.getSystemWindowInsetBottom());
                 return insets.consumeSystemWindowInsets();
             });
+
             // Overriding Text Direction in the Androidx preference library to support RTL
             view.setTextDirection(View.TEXT_DIRECTION_LOCALE);
         }
@@ -296,103 +197,44 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
             outState.putBoolean(SAVE_HIGHLIGHTED_KEY, mPreferenceHighlighted);
         }
 
-        protected String getParentKeyForPref(String key) {
-            return null;
-        }
-
-        /**
-         * Initializes a preference. This is called for every preference. Returning false here
-         * will remove that preference from the list.
-         */
-        protected boolean initPreference(Preference preference, PreferenceGroup group) {
-            switch (preference.getKey()) {
-                case NOTIFICATION_DOTS_PREFERENCE_KEY:
-                    return !WidgetsModel.GO_DISABLE_NOTIFICATION_DOTS;
-
-                case ALLOW_ROTATION_PREFERENCE_KEY:
-                    DisplayController.Info info =
-                            DisplayController.INSTANCE.get(getContext()).getInfo();
-                    if (info.isTablet(info.realBounds)) {
-                        // Launcher supports rotation by default. No need to show this setting.
-                        return false;
-                    }
-                    // Initialize the UI once
-                    preference.setDefaultValue(RotationHelper.getAllowRotationDefaultValue(info));
-                    return true;
-
-                case FLAGS_PREFERENCE_KEY:
-                    // Only show flag toggler UI if this build variant implements that.
-                    return FeatureFlags.showFlagTogglerUi(getContext());
-
-                case DEVELOPER_OPTIONS_KEY:
-                    mDeveloperOptionPref = preference;
-                    mDeveloperOptionPrefGroup = group;
-                    return updateDeveloperOption();
-
-                case KEY_ENABLE_MINUS_ONE:
-                    preference.setEnabled(isGsaEnabled());
-                    return true;
-
-                case KEY_DOCK_SEARCH:
-                    preference.setEnabled(isGsaEnabled());
-                    return true;
-
-                case KEY_SMARTSPACE:
-                    preference.setEnabled(isGsaEnabled() && isAsiEnabled());
-                    return true;
-
-                case KEY_SUGGESTIONS:
-                    preference.setEnabled(isAsiEnabled());
-                    return true;
-            }
-
-            return true;
-        }
-
-        /**
-         * Show if plugins are enabled or flag UI is enabled.
-         * @return True if we should show the preference option.
-         */
-        private boolean updateDeveloperOption() {
-            boolean showPreference = FeatureFlags.showFlagTogglerUi(getContext())
-                    || PluginManagerWrapper.hasPlugins(getContext());
-            if (mDeveloperOptionPref != null && mDeveloperOptionPrefGroup != null) {
-                mDeveloperOptionPref.setEnabled(showPreference);
-                if (showPreference) {
-                    getPreferenceScreen().addPreference(mDeveloperOptionPrefGroup);
-                    mDeveloperOptionPrefGroup.addPreference(mDeveloperOptionPref);
-                } else {
-                    mDeveloperOptionPrefGroup.removePreference(mDeveloperOptionPref);
-                    if (mDeveloperOptionPrefGroup.getPreferenceCount() == 0) {
-                        getPreferenceScreen().removePreference(mDeveloperOptionPrefGroup);
-                    }
-                }
-            }
-            return showPreference;
-        }
-
-        private boolean isGsaEnabled() {
-            return Utilities.isGSAEnabled(getContext());
-        }
-
-        private boolean isAsiEnabled() {
-            return Utilities.isASIEnabled(getContext());
-        }
-
         @Override
         public void onResume() {
             super.onResume();
-
-            updateDeveloperOption();
 
             if (isAdded() && !mPreferenceHighlighted) {
                 PreferenceHighlighter highlighter = createHighlighter();
                 if (highlighter != null) {
                     getView().postDelayed(highlighter, DELAY_HIGHLIGHT_DURATION_MILLIS);
                     mPreferenceHighlighted = true;
-                } else {
-                    requestAccessibilityFocus(getListView());
                 }
+            }
+
+            if (mRestartOnResume) {
+                recreateActivityNow();
+            }
+        }
+
+        @Override
+        public void onSettingsChanged(boolean isEnabled) {
+            // Developer options changed, try recreate
+            tryRecreateActivity();
+        }
+
+        /**
+         * Tries to recreate the preference
+         */
+        protected void tryRecreateActivity() {
+            if (isResumed()) {
+                recreateActivityNow();
+            } else {
+                mRestartOnResume = true;
+            }
+        }
+
+        private void recreateActivityNow() {
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.recreate();
             }
         }
 
@@ -412,15 +254,6 @@ public class SettingsActivity extends CollapsingToolbarBaseActivity
             return position >= 0 ? new PreferenceHighlighter(
                     list, position, screen.findPreference(mHighLightKey))
                     : null;
-        }
-
-        private void requestAccessibilityFocus(@NonNull final RecyclerView rv) {
-            rv.post(() -> {
-                if (!rv.hasFocus() && rv.getChildCount() > 0) {
-                    rv.getChildAt(0)
-                            .performAccessibilityAction(ACTION_ACCESSIBILITY_FOCUS, null);
-                }
-            });
         }
     }
 }

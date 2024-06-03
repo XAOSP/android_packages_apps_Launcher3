@@ -22,8 +22,11 @@ import static com.android.launcher3.uioverrides.states.OverviewModalTaskState.ge
 import android.content.Context;
 import android.graphics.Color;
 
+import androidx.core.graphics.ColorUtils;
+
 import com.android.launcher3.DeviceProfile;
 import com.android.launcher3.R;
+import com.android.launcher3.Utilities;
 import com.android.launcher3.statemanager.BaseState;
 import com.android.launcher3.util.Themes;
 import com.android.quickstep.RecentsActivity;
@@ -42,13 +45,15 @@ public class RecentsState implements BaseState<RecentsState> {
     private static final int FLAG_LIVE_TILE = BaseState.getFlag(6);
     private static final int FLAG_OVERVIEW_UI = BaseState.getFlag(7);
     private static final int FLAG_TASK_THUMBNAIL_SPLASH = BaseState.getFlag(8);
+    private static final int FLAG_MEMINFO = BaseState.getFlag(8);
 
     public static final RecentsState DEFAULT = new RecentsState(0,
             FLAG_DISABLE_RESTORE | FLAG_CLEAR_ALL_BUTTON | FLAG_OVERVIEW_ACTIONS | FLAG_SHOW_AS_GRID
-                    | FLAG_SCRIM | FLAG_LIVE_TILE | FLAG_OVERVIEW_UI);
+                    | FLAG_SCRIM | FLAG_LIVE_TILE | FLAG_OVERVIEW_UI | FLAG_MEMINFO);
     public static final RecentsState MODAL_TASK = new ModalState(1,
             FLAG_DISABLE_RESTORE | FLAG_CLEAR_ALL_BUTTON | FLAG_OVERVIEW_ACTIONS | FLAG_MODAL
-                    | FLAG_SHOW_AS_GRID | FLAG_SCRIM | FLAG_LIVE_TILE | FLAG_OVERVIEW_UI);
+                    | FLAG_SHOW_AS_GRID | FLAG_SCRIM | FLAG_LIVE_TILE | FLAG_OVERVIEW_UI
+                     | FLAG_MEMINFO);
     public static final RecentsState BACKGROUND_APP = new BackgroundAppState(2,
             FLAG_DISABLE_RESTORE | FLAG_NON_INTERACTIVE | FLAG_FULL_SCREEN | FLAG_OVERVIEW_UI
                     | FLAG_TASK_THUMBNAIL_SPLASH);
@@ -117,6 +122,13 @@ public class RecentsState implements BaseState<RecentsState> {
     }
 
     /**
+     * For this state, whether mem info view should be shown.
+     */
+    public boolean hasMemInfoView() {
+        return hasFlag(FLAG_MEMINFO);
+    }
+
+    /**
      * For this state, whether live tile should be shown.
      */
     public boolean hasLiveTile() {
@@ -127,7 +139,9 @@ public class RecentsState implements BaseState<RecentsState> {
      * For this state, what color scrim should be drawn behind overview.
      */
     public int getScrimColor(RecentsActivity activity) {
-        return hasFlag(FLAG_SCRIM) ? Themes.getAttrColor(activity, R.attr.overviewScrimColor)
+        return hasFlag(FLAG_SCRIM) ? ColorUtils.setAlphaComponent(
+                Themes.getAttrColor(activity, R.attr.overviewScrimColor),
+                Utilities.getRecentsOpacity(activity) * 255 / 100)
                 : Color.TRANSPARENT;
     }
 

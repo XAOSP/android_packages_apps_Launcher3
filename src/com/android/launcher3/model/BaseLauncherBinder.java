@@ -16,6 +16,7 @@
 
 package com.android.launcher3.model;
 
+import static com.android.launcher3.config.FeatureFlags.ENABLE_SMARTSPACE_REMOVAL;
 import static com.android.launcher3.model.ItemInstallQueue.FLAG_LOADER_RUNNING;
 import static com.android.launcher3.model.ModelUtils.filterCurrentWorkspaceItems;
 import static com.android.launcher3.util.Executors.MODEL_EXECUTOR;
@@ -88,7 +89,7 @@ public abstract class BaseLauncherBinder {
         try {
             if (FeatureFlags.ENABLE_WORKSPACE_LOADING_OPTIMIZATION.get()) {
                 DisjointWorkspaceBinder workspaceBinder =
-                    initWorkspaceBinder(incrementBindId, mBgDataModel.collectWorkspaceScreens(mApp.getContext()));
+                    initWorkspaceBinder(incrementBindId, mBgDataModel.collectWorkspaceScreens());
                 workspaceBinder.bindCurrentWorkspacePages(isBindSync);
                 workspaceBinder.bindOtherWorkspacePages();
             } else {
@@ -129,7 +130,7 @@ public abstract class BaseLauncherBinder {
         synchronized (mBgDataModel) {
             workspaceItems.addAll(mBgDataModel.workspaceItems);
             appWidgets.addAll(mBgDataModel.appWidgets);
-            orderedScreenIds.addAll(mBgDataModel.collectWorkspaceScreens(mApp.getContext()));
+            orderedScreenIds.addAll(mBgDataModel.collectWorkspaceScreens());
             mBgDataModel.extraItems.forEach(extraItems::add);
             if (incrementBindId) {
                 mBgDataModel.lastBindId++;
@@ -170,6 +171,11 @@ public abstract class BaseLauncherBinder {
      * bindWidgets is abstract because it is a no-op for the go launcher.
      */
     public abstract void bindWidgets();
+
+    /**
+     * bindWidgets is abstract because it is a no-op for the go launcher.
+     */
+    public abstract void bindSmartspaceWidget();
 
     /**
      * Sorts the set of items by hotseat, workspace (spatially from top to bottom, left to right)
@@ -288,6 +294,10 @@ public abstract class BaseLauncherBinder {
             executeCallbacksTask(c -> {
                 c.clearPendingBinds();
                 c.startBinding();
+                if (ENABLE_SMARTSPACE_REMOVAL.get()) {
+                    c.setIsFirstPagePinnedItemEnabled(
+                            mBgDataModel.isFirstPagePinnedItemEnabled);
+                }
             }, mUiExecutor);
 
             // Bind workspace screens
@@ -305,6 +315,10 @@ public abstract class BaseLauncherBinder {
             Executor pendingExecutor = pendingTasks::add;
             bindWorkspaceItems(otherWorkspaceItems, pendingExecutor);
             bindAppWidgets(otherAppWidgets, pendingExecutor);
+
+            StringCache cacheClone = mBgDataModel.stringCache.clone();
+            executeCallbacksTask(c -> c.bindStringCache(cacheClone), pendingExecutor);
+
             executeCallbacksTask(c -> c.finishBindingItems(currentScreenIds), pendingExecutor);
             pendingExecutor.execute(
                     () -> {
@@ -319,9 +333,6 @@ public abstract class BaseLauncherBinder {
                         c.onInitialBindComplete(
                                 currentScreenIds, pendingTasks, workspaceItemCount, isBindSync);
                     }, mUiExecutor);
-
-            StringCache cacheClone = mBgDataModel.stringCache.clone();
-            executeCallbacksTask(c -> c.bindStringCache(cacheClone), pendingExecutor);
         }
 
         private void bindWorkspaceItems(

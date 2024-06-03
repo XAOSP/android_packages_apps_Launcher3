@@ -21,10 +21,10 @@ import android.content.Context;
 import android.graphics.Rect;
 
 import com.android.launcher3.BaseDraggingActivity;
+import com.android.launcher3.Flags;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherPrefs;
 import com.android.launcher3.LauncherState;
-import com.android.launcher3.config.FeatureFlags;
 import com.android.quickstep.views.RecentsView;
 
 /**
@@ -47,8 +47,16 @@ public class OverviewModalTaskState extends OverviewState {
 
     @Override
     public int getVisibleElements(Launcher launcher) {
+        boolean memInfo = LauncherPrefs.getPrefs(launcher).getBoolean("pref_recents_meminfo", false);
         boolean clearAll = LauncherPrefs.getPrefs(launcher).getBoolean("pref_recents_clear_all", true);
-        return OVERVIEW_ACTIONS | (!clearAll ? CLEAR_ALL_BUTTON : 0);
+        int elements = OVERVIEW_ACTIONS;
+        if (memInfo) {
+            elements |= MEMINFO;
+        }
+        if (!clearAll) {
+            elements |= CLEAR_ALL_BUTTON;
+        }
+        return elements;
     }
 
     @Override
@@ -74,7 +82,7 @@ public class OverviewModalTaskState extends OverviewState {
 
     @Override
     public boolean isTaskbarStashed(Launcher launcher) {
-        if (FeatureFlags.ENABLE_GRID_ONLY_OVERVIEW.get()) {
+        if (Flags.enableGridOnlyOverview()) {
             return true;
         }
         return super.isTaskbarStashed(launcher);

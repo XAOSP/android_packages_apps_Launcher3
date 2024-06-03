@@ -20,7 +20,9 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.android.launcher3">
+    package="com.android.launcher3"
+    coreApp="true"
+    android:sharedUserId="android.uid.system">
 
     <!--
     The manifest defines the common entries that should be present in any derivative of Launcher3.
@@ -31,7 +33,7 @@
     with some minor changed based on the derivative app.
     -->
 
-    <uses-sdk android:minSdkVersion="29"/>
+    <uses-sdk android:minSdkVersion="30"/>
 
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
@@ -43,18 +45,17 @@
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.SUSPEND_APPS" />
+    <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" />
     <!-- for rotating surface by arbitrary degree -->
-    <uses-permission android:name="android.permission.ACCESS_SURFACE_FLINGER" />
     <uses-permission android:name="android.permission.ROTATE_SURFACE_FLINGER" />
     <uses-permission android:name="android.permission.WAKEUP_SURFACE_FLINGER" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.DEVICE_POWER" />
-    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
-
-    <permission android:name="com.google.android.apps.nexuslauncher.permission.QSB" android:protectionLevel="signatureOrSystem"/>
-    <uses-permission android:name="com.google.android.apps.nexuslauncher.permission.QSB"/>
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="lineageos.permission.WRITE_SETTINGS" />
 
     <!--
     Permissions required for read/write access to the workspace data. These permission name
@@ -77,11 +78,12 @@
 
     <application
         android:backupAgent="com.android.launcher3.LauncherBackupAgent"
+        android:name="com.android.launcher3.LauncherApplication"
         android:fullBackupOnly="true"
         android:backupInForeground="true"
         android:fullBackupContent="@xml/backupscheme"
         android:hardwareAccelerated="true"
-        android:icon="@drawable/ic_launcher_home"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/derived_app_name"
         android:largeHeap="@bool/config_largeHeap"
         android:restoreAnyVersion="true"
@@ -155,7 +157,7 @@
         -->
         <activity
             android:name="com.android.launcher3.settings.SettingsActivity"
-            android:label="@string/settings_button_text"
+            android:label="@string/settings_title"
             android:theme="@style/HomeSettings.Theme"
             android:exported="true"
             android:autoRemoveFromRecents="true">
@@ -164,6 +166,54 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- Icons -->
+        <activity
+            android:name="com.android.launcher3.settings.SettingsIcons"
+            android:label="@string/icons_category_title"
+            android:theme="@style/HomeSettings.Theme"
+            android:exported="true"
+            android:autoRemoveFromRecents="true" />
+
+        <!-- App drawer -->
+        <activity
+            android:name="com.android.launcher3.settings.SettingsAppDrawer"
+            android:label="@string/app_drawer_category_title"
+            android:theme="@style/HomeSettings.Theme"
+            android:exported="true"
+            android:autoRemoveFromRecents="true" />
+
+        <!-- Homescreen -->
+        <activity
+            android:name="com.android.launcher3.settings.SettingsHomescreen"
+            android:label="@string/home_category_title"
+            android:theme="@style/HomeSettings.Theme"
+            android:exported="true"
+            android:autoRemoveFromRecents="true" />
+
+        <!-- Misc settings -->
+        <activity
+            android:name="com.android.launcher3.settings.SettingsMisc"
+            android:label="@string/misc_category_title"
+            android:theme="@style/HomeSettings.Theme"
+            android:exported="true"
+            android:autoRemoveFromRecents="true" />
+
+        <!-- Recents -->
+        <activity
+            android:name="com.android.launcher3.settings.SettingsRecents"
+            android:label="@string/recents_category_title"
+            android:theme="@style/HomeSettings.Theme"
+            android:exported="true"
+            android:autoRemoveFromRecents="true" />
+
+        <!-- Icon Pack -->
+        <activity
+            android:name="com.android.launcher3.icons.pack.IconPackSettingsActivity"
+            android:label="@string/icon_pack_title"
+            android:theme="@style/HomeSettings.Theme"
+            android:exported="true"
+            android:autoRemoveFromRecents="true"  />
 
         <provider
             android:name="com.android.launcher3.testing.TestInformationProvider"
@@ -194,5 +244,11 @@
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
             tools:node="remove" />
+
+        <activity
+            android:name="com.android.launcher3.lineage.trust.TrustAppsActivity"
+            android:label="@string/trust_apps_manager_name"
+            android:theme="@android:style/Theme.DeviceDefault.Settings"
+            android:autoRemoveFromRecents="true" />
     </application>
 </manifest>

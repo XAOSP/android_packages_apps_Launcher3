@@ -17,7 +17,9 @@
 package com.android.quickstep.views;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.util.AttributeSet;
@@ -30,15 +32,18 @@ import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
 import com.android.launcher3.DeviceProfile;
+import com.android.launcher3.Flags;
 import com.android.launcher3.Insettable;
+import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherPrefs;
 import com.android.launcher3.R;
 import com.android.launcher3.Utilities;
-import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.util.DisplayController;
 import com.android.launcher3.util.MultiPropertyFactory.MultiProperty;
 import com.android.launcher3.util.MultiValueAlpha;
 import com.android.launcher3.util.NavigationMode;
+import com.android.launcher3.util.ShakeUtils;
+import com.android.launcher3.util.VibratorWrapper;
 import com.android.quickstep.TaskOverlayFactory.OverlayUICallbacks;
 import com.android.quickstep.util.LayoutUtils;
 
@@ -49,7 +54,7 @@ import java.lang.annotation.RetentionPolicy;
  * View for showing action buttons in Overview
  */
 public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayout
-        implements OnClickListener, Insettable, SharedPreferences.OnSharedPreferenceChangeListener {
+        implements OnClickListener, Insettable, SharedPreferences.OnSharedPreferenceChangeListener, ShakeUtils.OnShakeListener {
 
     private final Rect mInsets = new Rect();
 
@@ -101,9 +106,11 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
     private static final String KEY_RECENTS_SCREENSHOT = "pref_recents_screenshot";
     private static final String KEY_RECENTS_CLEAR_ALL = "pref_recents_clear_all";
     private static final String KEY_RECENTS_LENS = "pref_recents_lens";
+    private static final String KEY_RECENTS_SHAKE_CLEAR_ALL = "pref_recents_shake_clear_all";
 
     private MultiValueAlpha mMultiValueAlpha;
     private Button mSplitButton;
+    private ShakeUtils mShakeUtils;
 
     @ActionsHiddenFlags
     private int mHiddenFlags;
@@ -127,6 +134,9 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
     private boolean mScreenshot;
     private boolean mClearAll;
     private boolean mLens;
+    private boolean mShakeClearAll;
+
+    private Launcher mLauncher;
 
     public OverviewActionsView(Context context) {
         this(context, null);
@@ -143,6 +153,23 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
         mClearAll = prefs.getBoolean(KEY_RECENTS_CLEAR_ALL, true);
         mLens = prefs.getBoolean(KEY_RECENTS_LENS, false);
         prefs.registerOnSharedPreferenceChangeListener(this);
+        mShakeUtils = new ShakeUtils(context);
+        mShakeClearAll = prefs.getBoolean(KEY_RECENTS_SHAKE_CLEAR_ALL, true);
+        try {
+            mLauncher = isHomeApp(context) ? Launcher.getLauncher(context) : null;
+        } catch (Exception e) {
+            mLauncher = null;
+        }
+    }
+
+    @Override
+    public void onVisibilityAggregated(boolean isVisible) {
+        super.onVisibilityAggregated(isVisible);
+        if (isVisible && mShakeClearAll) {
+            mShakeUtils.registerShakeListener(this);
+        } else {
+            mShakeUtils.unregisterShakeListener(this);
+        }
     }
 
     @Override
@@ -173,6 +200,15 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
         mSplitButton.setOnClickListener(this);
     }
 
+    @Override
+    public void onShake(double speed) {
+        if (mCallbacks != null && mShakeClearAll && mLauncher != null &&
+                mLauncher.getOverviewPanel().getVisibility() == View.VISIBLE) {
+            VibratorWrapper.INSTANCE.get(getContext()).vibrate(VibratorWrapper.EFFECT_CLICK);
+            mCallbacks.onClearAllTasksRequested();
+        }
+    }
+
     /**
      * Set listener for callbacks on action button taps.
      *
@@ -189,12 +225,16 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
         }
         final int id = view.getId();
         if (id == R.id.action_screenshot) {
+            VibratorWrapper.INSTANCE.get(getContext()).vibrate(VibratorWrapper.EFFECT_CLICK);
             mCallbacks.onScreenshot();
         } else if (id == R.id.action_split) {
+            VibratorWrapper.INSTANCE.get(getContext()).vibrate(VibratorWrapper.EFFECT_CLICK);
             mCallbacks.onSplit();
         } else if (id == R.id.action_clear_all) {
+            VibratorWrapper.INSTANCE.get(getContext()).vibrate(VibratorWrapper.EFFECT_CLICK);
             mCallbacks.onClearAllTasksRequested();
         } else if (id == R.id.action_lens) {
+            VibratorWrapper.INSTANCE.get(getContext()).vibrate(VibratorWrapper.EFFECT_CLICK);
             mCallbacks.onLens();
         }
     }
@@ -220,6 +260,8 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
             mClearAll = prefs.getBoolean(KEY_RECENTS_CLEAR_ALL, true);
         } else if (key.equals(KEY_RECENTS_LENS)) {
             mLens = prefs.getBoolean(KEY_RECENTS_LENS, false);
+        } else if (key.equals(KEY_RECENTS_SHAKE_CLEAR_ALL)) {
+            mShakeClearAll = prefs.getBoolean(KEY_RECENTS_SHAKE_CLEAR_ALL, true);
         }
         updateVisibilities();
     }
@@ -338,7 +380,7 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
             return 0;
         }
 
-        if (mDp.isTablet && FeatureFlags.ENABLE_GRID_ONLY_OVERVIEW.get()) {
+        if (mDp.isTablet && Flags.enableGridOnlyOverview()) {
             return mDp.stashedTaskbarHeight;
         }
 
@@ -356,10 +398,6 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
         updateVerticalMargin(DisplayController.getNavigationMode(getContext()));
 
         requestLayout();
-
-        mSplitButton.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                (dp.isLandscape ? R.drawable.ic_split_horizontal : R.drawable.ic_split_vertical),
-                0, 0, 0);
     }
 
     /**
@@ -375,4 +413,14 @@ public class OverviewActionsView<T extends OverlayUICallbacks> extends FrameLayo
         mSplitButton.setEnabled(shouldBeEnabled);
     }
 
+    private boolean isHomeApp(Context context) {
+        final Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addCategory(Intent.CATEGORY_HOME);
+        final ResolveInfo res = context.getPackageManager().resolveActivity(intent, 0);
+        if (res.activityInfo != null && context.getPackageName()
+                .equals(res.activityInfo.packageName)) {
+            return true;
+        }
+        return false;
+    }
 }

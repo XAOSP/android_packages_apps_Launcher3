@@ -18,7 +18,8 @@ package com.android.launcher3.model;
 import static android.text.format.DateUtils.DAY_IN_MILLIS;
 import static android.text.format.DateUtils.formatElapsedTime;
 
-import static com.android.launcher3.LauncherPrefs.getDevicePrefs;
+import static com.android.launcher3.LauncherPrefs.nonRestorableItem;
+import static com.android.launcher3.EncryptionType.ENCRYPTED;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_HOTSEAT_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_PREDICTION;
 import static com.android.launcher3.LauncherSettings.Favorites.CONTAINER_WIDGETS_PREDICTION;
@@ -39,7 +40,6 @@ import android.app.prediction.AppTarget;
 import android.app.prediction.AppTargetEvent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.ShortcutInfo;
@@ -55,9 +55,12 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.annotation.WorkerThread;
 
+import com.android.launcher3.ConstantItem;
 import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.LauncherAppState;
+import com.android.launcher3.LauncherPrefs;
 import com.android.launcher3.config.FeatureFlags;
+import com.android.launcher3.lineage.trust.db.TrustDatabaseHelper;
 import com.android.launcher3.logger.LauncherAtom;
 import com.android.launcher3.logging.InstanceId;
 import com.android.launcher3.logging.InstanceIdSequence;
@@ -86,13 +89,14 @@ import java.util.stream.IntStream;
  */
 public class QuickstepModelDelegate extends ModelDelegate {
 
-    public static final String LAST_PREDICTION_ENABLED_STATE = "last_prediction_enabled_state";
-    private static final String LAST_SNAPSHOT_TIME_MILLIS = "LAST_SNAPSHOT_TIME_MILLIS";
     private static final String BUNDLE_KEY_ADDED_APP_WIDGETS = "added_app_widgets";
     private static final int NUM_OF_RECOMMENDED_WIDGETS_PREDICATION = 20;
 
     private static final boolean IS_DEBUG = false;
     private static final String TAG = "QuickstepModelDelegate";
+
+    private static final ConstantItem<Long> LAST_SNAPSHOT_TIME_MILLIS =
+            nonRestorableItem("LAST_SNAPSHOT_TIME_MILLIS", 0L, ENCRYPTED);
 
     @VisibleForTesting
     final PredictorState mAllAppsState =
@@ -211,8 +215,8 @@ public class QuickstepModelDelegate extends ModelDelegate {
         super.modelLoadComplete();
 
         // Log snapshot of the model
-        SharedPreferences prefs = getDevicePrefs(mApp.getContext());
-        long lastSnapshotTimeMillis = prefs.getLong(LAST_SNAPSHOT_TIME_MILLIS, 0);
+        LauncherPrefs prefs = LauncherPrefs.get(mApp.getContext());
+        long lastSnapshotTimeMillis = prefs.get(LAST_SNAPSHOT_TIME_MILLIS);
         // Log snapshot only if previous snapshot was older than a day
         long now = System.currentTimeMillis();
         if (now - lastSnapshotTimeMillis < DAY_IN_MILLIS) {
@@ -233,7 +237,7 @@ public class QuickstepModelDelegate extends ModelDelegate {
                 StatsLogCompatManager.writeSnapshot(info.buildProto(parent), instanceId);
             }
             additionalSnapshotEvents(instanceId);
-            prefs.edit().putLong(LAST_SNAPSHOT_TIME_MILLIS, now).apply();
+            prefs.put(LAST_SNAPSHOT_TIME_MILLIS, now);
         }
 
         // Only register for launcher snapshot logging if this is the primary ModelDelegate
@@ -345,10 +349,13 @@ public class QuickstepModelDelegate extends ModelDelegate {
             return;
         }
 
+        TrustDatabaseHelper trustData = mApp.getTrustData();
+        int totalPackageHidden = trustData != null ? trustData.getTotalPackageHidden() : 0;
+
         registerPredictor(mAllAppsState, apm.createAppPredictionSession(
                 new AppPredictionContext.Builder(context)
                         .setUiSurface("home")
-                        .setPredictedTargetCount(mIDP.numDatabaseAllAppsColumns)
+                        .setPredictedTargetCount(mIDP.numDatabaseAllAppsColumns + totalPackageHidden)
                         .build()));
 
         // TODO: get bundle
@@ -377,10 +384,13 @@ public class QuickstepModelDelegate extends ModelDelegate {
     }
 
     private void registerHotseatPredictor(AppPredictionManager apm, Context context) {
+        TrustDatabaseHelper trustData = mApp.getTrustData();
+        int totalPackageHidden = trustData != null ? trustData.getTotalPackageHidden() : 0;
+
         registerPredictor(mHotseatState, apm.createAppPredictionSession(
                 new AppPredictionContext.Builder(context)
                         .setUiSurface("hotseat")
-                        .setPredictedTargetCount(mIDP.numDatabaseHotseatIcons)
+                        .setPredictedTargetCount(mIDP.numDatabaseHotseatIcons + totalPackageHidden)
                         .setExtras(convertDataModelToAppTargetBundle(context, mDataModel))
                         .build()));
     }

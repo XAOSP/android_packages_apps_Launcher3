@@ -15,8 +15,8 @@
  */
 package com.android.launcher3.touch;
 
-import static com.android.launcher3.Launcher.REQUEST_BIND_PENDING_APPWIDGET;
-import static com.android.launcher3.Launcher.REQUEST_RECONFIGURE_APPWIDGET;
+import static com.android.launcher3.LauncherConstants.ActivityCodes.REQUEST_BIND_PENDING_APPWIDGET;
+import static com.android.launcher3.LauncherConstants.ActivityCodes.REQUEST_RECONFIGURE_APPWIDGET;
 import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_FOLDER_OPEN;
 import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_BY_PUBLISHER;
 import static com.android.launcher3.model.data.ItemInfoWithIcon.FLAG_DISABLED_LOCKED_USER;
@@ -27,6 +27,7 @@ import static com.android.launcher3.util.Executors.MAIN_EXECUTOR;
 import static com.android.launcher3.util.Executors.UI_HELPER_EXECUTOR;
 
 import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.LauncherApps;
@@ -45,6 +46,7 @@ import com.android.launcher3.Utilities;
 import com.android.launcher3.apppairs.AppPairIcon;
 import com.android.launcher3.folder.Folder;
 import com.android.launcher3.folder.FolderIcon;
+import com.android.launcher3.lineage.trust.db.TrustDatabaseHelper;
 import com.android.launcher3.logging.InstanceId;
 import com.android.launcher3.logging.InstanceIdSequence;
 import com.android.launcher3.logging.StatsLogManager;
@@ -61,7 +63,10 @@ import com.android.launcher3.testing.shared.TestProtocol;
 import com.android.launcher3.util.ItemInfoMatcher;
 import com.android.launcher3.util.PackageManagerHelper;
 import com.android.launcher3.views.FloatingIconView;
+import com.android.launcher3.views.Snackbar;
 import com.android.launcher3.widget.LauncherAppWidgetProviderInfo;
+import com.android.launcher3.widget.PendingAddShortcutInfo;
+import com.android.launcher3.widget.PendingAddWidgetInfo;
 import com.android.launcher3.widget.PendingAppWidgetHostView;
 import com.android.launcher3.widget.WidgetAddFlowHandler;
 import com.android.launcher3.widget.WidgetManagerHelper;
@@ -107,6 +112,16 @@ public class ItemClickHandler {
             }
         } else if (tag instanceof ItemClickProxy) {
             ((ItemClickProxy) tag).onItemClicked(v);
+        } else if (tag instanceof PendingAddShortcutInfo) {
+            CharSequence msg = Utilities.wrapForTts(
+                    launcher.getText(R.string.long_press_shortcut_to_add),
+                    launcher.getString(R.string.long_accessible_way_to_add_shortcut));
+            Snackbar.show(launcher, msg, null);
+        } else if (tag instanceof PendingAddWidgetInfo) {
+            CharSequence msg = Utilities.wrapForTts(
+                    launcher.getText(R.string.long_press_widget_to_add),
+                    launcher.getString(R.string.long_accessible_way_to_add));
+            Snackbar.show(launcher, msg, null);
         }
     }
 
@@ -132,8 +147,8 @@ public class ItemClickHandler {
      */
     private static void onClickAppPairIcon(View v) {
         Launcher launcher = Launcher.getLauncher(v.getContext());
-        FolderInfo folderInfo = ((AppPairIcon) v).getInfo();
-        launcher.launchAppPair(folderInfo.contents.get(0), folderInfo.contents.get(1));
+        AppPairIcon appPairIcon = (AppPairIcon) v;
+        launcher.launchAppPair(appPairIcon);
     }
 
     /**
@@ -362,7 +377,16 @@ public class ItemClickHandler {
             // Preload the icon to reduce latency b/w swapping the floating view with the original.
             FloatingIconView.fetchIcon(launcher, v, item, true /* isOpening */);
         }
-        launcher.startActivitySafely(v, intent, item);
+
+        TrustDatabaseHelper db = TrustDatabaseHelper.getInstance(launcher);
+        ComponentName cn = item.getTargetComponent();
+        boolean isProtected = cn != null && db.isPackageProtected(cn.getPackageName());
+
+        if (isProtected) {
+            launcher.startActivitySafelyAuth(v, intent, item);
+        } else {
+            launcher.startActivitySafely(v, intent, item);
+        }
     }
 
     /**

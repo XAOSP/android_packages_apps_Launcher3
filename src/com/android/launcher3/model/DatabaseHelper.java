@@ -16,6 +16,7 @@
 package com.android.launcher3.model;
 
 import static com.android.launcher3.LauncherSettings.Favorites.addTableToDb;
+import static com.android.launcher3.config.FeatureFlags.shouldShowFirstPageWidget;
 import static com.android.launcher3.provider.LauncherDbUtils.dropTable;
 
 import android.content.ContentValues;
@@ -39,6 +40,7 @@ import com.android.launcher3.AutoInstallsLayout.LayoutParserCallback;
 import com.android.launcher3.LauncherSettings;
 import com.android.launcher3.LauncherSettings.Favorites;
 import com.android.launcher3.Utilities;
+import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.logging.FileLog;
 import com.android.launcher3.pm.UserCache;
 import com.android.launcher3.provider.LauncherDbUtils;
@@ -256,7 +258,8 @@ public class DatabaseHelper extends NoLocaleSQLiteHelper implements
                         Favorites.SCREEN, IntArray.wrap(-777, -778)), null);
             }
             case 30: {
-                if (isQsbOnFirstScreen()) {
+                if (FeatureFlags.QSB_ON_FIRST_SCREEN
+                        && !shouldShowFirstPageWidget()) {
                     // Clean up first row in screen 0 as it might contain junk data.
                     Log.d(TAG, "Cleaning up first row");
                     db.delete(Favorites.TABLE_NAME,
@@ -266,7 +269,6 @@ public class DatabaseHelper extends NoLocaleSQLiteHelper implements
                                     Favorites.CONTAINER, Favorites.CONTAINER_DESKTOP,
                                     Favorites.CELLY, 0), null);
                 }
-                return;
             }
             case 31: {
                 LauncherDbUtils.migrateLegacyShortcuts(mContext, db);
@@ -528,9 +530,5 @@ public class DatabaseHelper extends NoLocaleSQLiteHelper implements
             }
         }
         return max;
-    }
-
-    public boolean isQsbOnFirstScreen() {
-        return Utilities.showSmartspace(mContext);
     }
 }

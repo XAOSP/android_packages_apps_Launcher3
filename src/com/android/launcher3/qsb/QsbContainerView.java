@@ -20,6 +20,8 @@ import static android.appwidget.AppWidgetManager.ACTION_APPWIDGET_BIND;
 import static android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID;
 import static android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_PROVIDER;
 
+import static com.android.launcher3.config.FeatureFlags.shouldShowFirstPageWidget;
+
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.SearchManager;
@@ -282,14 +284,19 @@ public class QsbContainerView extends FrameLayout {
         }
 
         private void rebindFragment() {
-            if (mWrapper != null && getContext() != null && isQsbEnabled()) {
+            // Exit if the embedded qsb is disabled
+            if (!isQsbEnabled()) {
+                return;
+            }
+
+            if (mWrapper != null && getContext() != null) {
                 mWrapper.removeAllViews();
                 mWrapper.addView(createQsb(mWrapper));
             }
         }
 
         public boolean isQsbEnabled() {
-            return Utilities.showSmartspace(getContext());
+            return FeatureFlags.QSB_ON_FIRST_SCREEN && !shouldShowFirstPageWidget();
         }
 
         protected Bundle createBindOptions() {
